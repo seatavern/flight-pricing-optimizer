@@ -1,0 +1,11 @@
+name: flight-optimizer-demand-train
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy>=2.0.0
+  - scikit-learn>=1.5.0
+  - pip
+  - pip:
+      - mlflow>=2.14.0
+      - joblib>=1.3.0

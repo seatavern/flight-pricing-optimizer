@@ -39,3 +39,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# python
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+*.pyc
+mlruns/
+backend/outputs/
+
+# local MLflow database
+backend/mlflow.db

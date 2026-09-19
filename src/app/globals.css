@@ -1,26 +1,84 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #e6edf2;
+  --foreground: #1b3a57;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-page: #e6edf2;
+  --color-navy: #1b3a57;
+  --color-navy-deep: #163044;
+  --color-muted: #8b9aab;
+  --color-muted-2: #a7b4c0;
+  --color-line: #cfd8e1;
+  --color-panel: #ffffff;
+  --color-seat-open: #c5d3de;
+  --color-seat-taken: #1b3a57;
+  --color-gold: #c4a14a;
+  --color-aircraft-fill: #f6f8fa;
+  --color-aircraft-stroke: #8a9cb0;
+  --color-wing: #c5d0da;
+  --color-wing-stroke: #a8b6c2;
+  --color-window: #44586a;
+  --font-sans: var(--font-source-sans);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html,
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans), "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+@keyframes realized-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.realized-appear {
+  display: inline-block;
+  animation: realized-appear 200ms ease-out;
+  transform-origin: left center;
+}
+
+@keyframes revenue-delta-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.metric-delta {
+  animation: revenue-delta-in 180ms ease-out;
+}
+
+.seat-fill-transition {
+  transition: fill 160ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .realized-appear,
+  .metric-delta {
+    animation: none;
+  }
+
+  .seat-fill-transition {
+    transition: none;
+  }
 }
