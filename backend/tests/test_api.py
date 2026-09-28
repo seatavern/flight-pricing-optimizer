@@ -1,9 +1,25 @@
+import inspect
+
 from fastapi.testclient import TestClient
 
-from app.demand_model import HIDDEN_VARIABLES, TEST_SEED, TRAIN_SEED, TRAINING_SIZES
+from app.demand_model import HIDDEN_VARIABLES, TEST_SEED, TRAIN_SEED, TRAINING_SIZES, train_demand_model
 from app.main import app
 
 HIDDEN_KEYS = set(HIDDEN_VARIABLES) | {"model", "diagnostics", "latentDemand"}
+
+
+def test_lifespan_trains_and_activates_standard_demand_model(monkeypatch) -> None:
+    calls: list[tuple[int, int, dict[str, object]]] = []
+
+    def spy(n_flights: int, seed: int, **kwargs: object) -> None:
+        calls.append((n_flights, seed, kwargs))
+
+    monkeypatch.setattr("app.main.train_demand_model", spy)
+    with TestClient(app):
+        pass
+
+    assert calls == [(10_000, TRAIN_SEED, {})]
+    assert inspect.signature(train_demand_model).parameters["set_active"].default is True
 
 
 def test_status_is_not_trained_before_training() -> None:
