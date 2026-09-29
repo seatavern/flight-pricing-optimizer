@@ -1,36 +1,104 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Flight Pricing Optimizer
 
-## Getting Started
+An interactive machine learning and revenue optimization project that explores how an airline can set fares over time when demand is uncertain and aircraft capacity is limited.
 
-First, run the development server:
+The project separates the pricing problem into two parts:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- a machine learning model that predicts demand from observable flight state and candidate fare
+- a pricing policy that uses those predictions to choose a fare
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Three pricing strategies can be compared:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Fixed Fare** — uses the same fare throughout the booking horizon
+- **Myopic Pricing** — selects the fare with the highest predicted immediate revenue at that time step
+- **Dynamic Pricing** — uses Bellman optimization to account for both current revenue and the future value of remaining seats up until departure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The application includes an interactive flight simulator, a decision explorer, a policy map, and a model lab for retraining and evaluating the demand model.
 
-## Learn More
+> **Current version:** synthetic airline market with 100-seat flights and 10 booking periods, data generated from simulated price-sensitive demand with stochastic booking outcomes, a gradient-boosted demand model, and dynamic programming for sequential pricing.
 
-To learn more about Next.js, take a look at the following resources:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Live demo
 
-## Deploy on Vercel
+[Open the deployed application](https://flight-pricing-optimizer.thankfulsand-6fed6a90.germanywestcentral.azurecontainerapps.io/)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Demo
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+
+### Flight Simulator
+
+![Flight Simulator](docs/flight-simulator.png)
+
+### Decision Explorer
+
+![Decision Explorer](docs/decision-explorer.png)
+
+### Policy Map
+
+![Policy Map](docs/policy-map.png)
+
+### Model Lab
+
+![Model Lab](docs/model-lab.png)
+
+## How it works
+
+The synthetic market generates stochastic bookings as a function of time to departure, fare, and an unobserved flight-specific demand strength.
+
+The ML model does not observe this hidden demand strength. It learns from simulated historical data using only:
+
+- booking period
+- candidate fare
+- cumulative bookings
+
+Training data are generated using randomized fares across the available price levels.
+
+The trained model predicts expected bookings for each candidate fare. A Poisson distribution is then used to represent demand uncertainty.
+
+The pricing policies use the same demand model but optimize different objectives:
+
+**Myopic pricing**
+
+Chooses the fare that maximizes predicted revenue in the current period:
+
+`fare × expected bookings for that fare`
+
+**Dynamic pricing**
+
+Uses Bellman optimization to account for the opportunity cost of selling a seat now rather than keeping it available for future periods:
+
+`current expected revenue + expected future value of remaining capacity`
+
+This makes it possible to demonstrate an important revenue-management principle: a good demand model does not by itself guarantee good pricing decisions. The objective used to turn predictions into actions also matters.
+
+## What the project demonstrates
+
+- Demand modeling under price-sensitive stochastic demand
+- Machine learning from observable booking-state information
+- Randomized-price training data
+- Gradient-boosted demand prediction
+- Probabilistic demand modeling
+- Capacity-constrained airline revenue management
+- Myopic versus sequential pricing decisions
+- Bellman dynamic programming
+- Opportunity cost of remaining capacity
+- Policy visualization and model diagnostics
+
+
+
+## Tech stack
+
+- Python
+- FastAPI
+- scikit-learn
+- SciPy
+- NumPy
+- Next.js
+- React
+- TypeScript
+- Docker
+- Azure Container Registry
+- Azure Container Apps
+
