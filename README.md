@@ -7,7 +7,7 @@ The project separates the pricing problem into two parts:
 - a machine learning model that predicts demand from observable flight state and candidate fare
 - a pricing policy that uses those predictions to choose a fare
 
-Three pricing strategies can be cgit statusompared:
+Three pricing strategies can be compared:
 
 - **Fixed Fare** — uses the same fare throughout the booking horizon
 - **Myopic Pricing** — selects the fare with the highest predicted immediate revenue at that time step
@@ -18,9 +18,14 @@ The application includes an interactive flight simulator, a decision explorer, a
 > **Current version:** synthetic airline market with 100-seat flights and 10 booking periods, data generated from simulated price-sensitive demand with stochastic booking outcomes, a gradient-boosted demand model, and dynamic programming for sequential pricing.
 
 
+
 ## Live demo
 
+
+
 ### [Try the Flight Pricing Optimizer](https://flight-pricing-optimizer.thankfulsand-6fed6a90.germanywestcentral.azurecontainerapps.io/)
+
+
 
 ## Demo
 
