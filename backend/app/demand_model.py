@@ -128,7 +128,7 @@ def _clipped_predictions(model: HistGradientBoostingRegressor, X: np.ndarray) ->
 
 def evaluate_model(model: HistGradientBoostingRegressor, test_set: TrainingDataset) -> tuple[float, float]:
     X_test = observable_feature_matrix(test_set)
-    y_test = np.asarray(test_set.realized_bookings, dtype=np.float64)
+    y_test = test_set.target()
     y_pred = _clipped_predictions(model, X_test)
     mae = float(mean_absolute_error(y_test, y_pred))
     rmse = float(np.sqrt(mean_squared_error(y_test, y_pred)))
@@ -149,9 +149,10 @@ def train_demand_model(
 
     train_set = generate_training_data(n_flights, seed=seed)
     X_train = observable_feature_matrix(train_set)
-    y_train = np.asarray(train_set.realized_bookings, dtype=np.float64)
+    y_train = train_set.target()
 
-    model = HistGradientBoostingRegressor(random_state=seed)
+    # Fare is feature 1. Higher fares cannot increase predicted latent demand.
+    model = HistGradientBoostingRegressor(random_state=seed, monotonic_cst=[0, -1, 0])
     started = time.perf_counter()
     model.fit(X_train, y_train)
     training_time_seconds = time.perf_counter() - started

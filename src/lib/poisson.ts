@@ -20,31 +20,40 @@ export function poissonPmfs(lambda: number, maxK: number): number[] {
   return values;
 }
 
+function poissonSearchLimit(lambda: number): number {
+  return Math.ceil(lambda + 32 * Math.sqrt(lambda) + 64);
+}
+
 export function poissonSupportMax(lambda: number, coverage = 0.999): number {
   if (!(lambda > 0) || !Number.isFinite(lambda)) return 0;
   let cdf = 0;
   let probability = Math.exp(-lambda);
   let k = 0;
-  while (k < 100) {
+  const limit = poissonSearchLimit(lambda);
+  while (k < limit) {
     cdf += probability;
     if (cdf >= coverage) return k;
     k += 1;
     probability *= lambda / k;
+    if (!Number.isFinite(probability) || probability === 0) return k;
   }
-  return 100;
+  return limit;
 }
 
 export function samplePoisson(lambda: number, unitRandom: number): number {
-  const u = Math.min(Math.max(unitRandom, 0), 0.999999);
+  if (!(lambda > 0) || !Number.isFinite(lambda)) return 0;
+  const u = Math.min(Math.max(unitRandom, 0), 1 - 1e-16);
   let cdf = 0;
   let probability = Math.exp(-lambda);
   let k = 0;
+  const limit = poissonSearchLimit(lambda);
 
-  while (k < 40) {
+  while (k < limit) {
     cdf += probability;
     if (u <= cdf) return k;
     k += 1;
     probability *= lambda / k;
+    if (!Number.isFinite(probability) || probability === 0) return k;
   }
 
   return k;
@@ -56,6 +65,17 @@ export function poissonCappedPmfs(lambda: number, remaining: number): number[] {
   const mass = head.reduce((sum, value) => sum + value, 0);
   const tail = Math.max(0, 1 - mass);
   return [...head, tail];
+}
+
+/** Probability mass of Y = min(D, remaining) for latent D ~ Poisson(lambda). */
+export function realizedSalesPmf(lambda: number, remaining: number): number[] {
+  return poissonCappedPmfs(lambda, remaining);
+}
+
+/** E[min(D, remaining)] for latent D ~ Poisson(lambda). */
+export function expectedRealizedSales(lambda: number, remaining: number): number {
+  const pmf = realizedSalesPmf(lambda, remaining);
+  return pmf.reduce((sum, probability, sales) => sum + probability * sales, 0);
 }
 
 export function mulberry32(seed: number): () => number {

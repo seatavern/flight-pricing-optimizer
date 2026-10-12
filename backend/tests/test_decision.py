@@ -114,6 +114,8 @@ def test_period_nine_future_value_is_zero_and_policies_agree() -> None:
             "/pricing/decision", json={"period": 9, "remaining_capacity": remaining}
         ).json()
         assert payload["myopic_selected_fare"] == payload["optimized_selected_fare"]
+        if remaining == 0:
+            assert payload["myopic_selected_fare"] is None
         assert abs(payload["myopic_continuation_value"]) < 1e-12
         assert abs(payload["optimized_continuation_value"]) < 1e-12
         assert abs(payload["myopic_total_policy_value"] - payload["optimized_total_policy_value"]) < 1e-9
@@ -145,6 +147,8 @@ def test_zero_and_full_capacity_work() -> None:
     empty = client.post("/pricing/decision", json={"period": 0, "remaining_capacity": 0}).json()
     assert empty["remaining_capacity"] == 0
     assert empty["cumulative_bookings"] == CAPACITY
+    assert empty["myopic_selected_fare"] is None
+    assert empty["optimized_selected_fare"] is None
     assert empty["myopic_total_policy_value"] == 0
     assert empty["optimized_total_policy_value"] == 0
     for row in empty["candidates"]:

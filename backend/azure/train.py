@@ -75,7 +75,7 @@ def main() -> None:
     with mlflow.start_run():
         mlflow.log_param("algorithm", ALGORITHM)
         mlflow.log_param("features", ",".join(FEATURE_NAMES))
-        mlflow.log_param("target", "realized_bookings")
+        mlflow.log_param("target", "latent_demand")
         mlflow.log_param("train_seed", args.train_seed)
         mlflow.log_param("test_seed", args.test_seed)
         mlflow.log_param("training_flights", result.n_flights)

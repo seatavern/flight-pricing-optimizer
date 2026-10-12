@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from app.demand_model import get_active_model, predict_mean_batch
-from app.market import CAPACITY, FARES, N_PERIODS
+from app.market import CAPACITY, FARES, NO_FARE, N_PERIODS
 from app.myopic import DemandModelNotTrainedError
 from app.poisson_expectation import capped_poisson_probabilities, expected_min_poisson
 
@@ -42,8 +42,13 @@ def _precompute_predicted_mu(model) -> np.ndarray:
     return predicted.reshape(N_PERIODS, n_capacity, n_fares)
 
 
-def _myopic_fare_index(predicted_by_fare: np.ndarray, remaining: int) -> int:
-    """Same selection as myopic_decision: argmax_p p * E[min(D, c)], first max wins."""
+def _myopic_fare_index(predicted_by_fare: np.ndarray, remaining: int) -> int | None:
+    """Same selection as myopic_decision: argmax p * E[min(D, c)].
+
+    A full aircraft has no actionable fare. Lowest fare wins an exact revenue tie.
+    """
+    if remaining <= 0:
+        return None
     best_index = 0
     best_revenue = float("-inf")
     for fare_index, fare in enumerate(FARES.tolist()):
@@ -71,6 +76,10 @@ def solve_myopic_policy_value(model=None) -> MyopicPolicyValue:
     for period in range(N_PERIODS):
         for remaining in range(n_capacity):
             fare_index = _myopic_fare_index(predicted_all[period, remaining], remaining)
+            if fare_index is None:
+                policy[period, remaining] = NO_FARE
+                predicted_mu[period, remaining] = 0.0
+                continue
             policy[period, remaining] = int(FARES[fare_index])
             predicted_mu[period, remaining] = float(predicted_all[period, remaining, fare_index])
 

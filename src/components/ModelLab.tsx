@@ -241,7 +241,7 @@ export function ModelLab() {
           WHAT THE MODEL LEARNS
         </p>
         <p className="mt-2 text-[13px] font-medium text-navy">
-          PERIOD + FARE + CUMULATIVE BOOKINGS → PREDICTED BOOKINGS
+          PERIOD + FARE + CUMULATIVE BOOKINGS → LATENT DEMAND MEAN
         </p>
         <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2">
           <div>
@@ -261,7 +261,7 @@ export function ModelLab() {
               TRAINING TARGET
             </p>
             <p className="mt-2 text-[13px] text-navy">
-              REALIZED BOOKINGS <span className="text-muted">Bookings observed during the period</span>
+              LATENT DEMAND <span className="text-muted">Unconstrained Poisson draw for the period</span>
             </p>
           </div>
           <div>
@@ -287,17 +287,23 @@ export function ModelLab() {
           <div className="mt-3 max-w-3xl text-[13px] leading-5 text-muted">
             <p>
               HistGradientBoostingRegressor is a tree-based supervised learning model. It predicts
-              expected bookings:
+              the mean of unconstrained passenger demand:
             </p>
             <p className="mt-2 font-medium text-navy">μ̂ = f(period, fare, cumulative_bookings)</p>
             <p className="mt-2">
-              The pricing system then assumes D ~ Poisson(μ̂). This converts the point prediction
-              into a stochastic demand distribution used by Myopic expected-sales calculations and
-              Bellman optimization.
+              Training labels are the latent Poisson draws from the synthetic market. Cumulative
+              bookings stay censored by seats already sold, and market strength is never an input.
+              A real airline would not see the latent demand of a sold-out flight; this simulator
+              uses those labels so the prediction remains an unconstrained Poisson mean.
             </p>
             <p className="mt-2">
-              The Poisson assumption is part of the pricing model around the ML mean.
-              HistGradientBoosting itself does not output a Poisson distribution.
+              Pricing then assumes D ~ Poisson(μ̂) and applies remaining capacity once:
+              realized sales are min(D, seats left). That expectation is what Myopic revenue and
+              the Bellman state transitions use. Higher fares cannot increase μ̂.
+            </p>
+            <p className="mt-2">
+              HistGradientBoosting itself does not output a Poisson distribution. The Poisson
+              assumption is the pricing model around the predicted mean.
             </p>
           </div>
         </details>

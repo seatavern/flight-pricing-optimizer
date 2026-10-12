@@ -1,5 +1,6 @@
 import { DemandChart } from "@/components/DemandChart";
 import { periodLabel as formatPeriod } from "@/lib/constants";
+import { offeredFareLabel } from "@/lib/offeredFare";
 import type { FareKind } from "@/lib/types";
 
 type DemandPanelProps = {
@@ -7,6 +8,7 @@ type DemandPanelProps = {
   trueMarketMean: number | null;
   mlPredictedMean: number | null;
   selectedFare: number | null;
+  soldOut?: boolean;
   fareKind: FareKind;
   realizedBookings: number | null;
   showMlMean: boolean;
@@ -18,6 +20,7 @@ export function DemandPanel({
   trueMarketMean,
   mlPredictedMean,
   selectedFare,
+  soldOut = false,
   fareKind,
   realizedBookings,
   showMlMean,
@@ -32,8 +35,9 @@ export function DemandPanel({
       <h2 className="text-[11px] font-semibold tracking-[0.18em] text-muted">
         DEMAND DURING {demandPeriod}
       </h2>
-      <p className="mt-1 text-[11px] leading-4 text-muted-2 whitespace-nowrap">
-        Synthetic experiment: The true market process is hidden from the ML model. The model learns demand from observed bookings, fares, and flight state.
+      <p className="mt-1 text-[11px] leading-4 text-muted-2">
+        The chart compares true market demand with the ML model&apos;s prediction. Demand is
+        unconstrained by available seats.
       </p>
       <div className="mt-2 grid grid-cols-3 items-start gap-4">
         <MeanBlock value={trueMarketMean} label="TRUE MARKET MEAN" />
@@ -45,14 +49,14 @@ export function DemandPanel({
         {showMlMean ? (
           <RealizedBookingsBlock realizedBookings={realizedBookings} sampling={sampling} />
         ) : (
-          <div className="text-right">
-            <p className="flex h-[30px] items-end justify-end">
+          <div>
+            <p className="flex h-[30px] items-end">
               <span className="text-[30px] font-medium leading-none tabular-nums text-navy">
-                {selectedFare === null ? "—" : `$${selectedFare}`}
+                {offeredFareLabel(selectedFare, soldOut)}
               </span>
             </p>
             <p className="mt-2 text-[10px] font-medium tracking-[0.14em] text-muted">
-              {fareLabel}
+              {soldOut ? "FARE" : fareLabel}
             </p>
           </div>
         )}

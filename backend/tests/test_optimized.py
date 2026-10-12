@@ -5,7 +5,7 @@ from scipy.stats import poisson
 
 from app.demand_model import HIDDEN_VARIABLES, predict_mean, train_demand_model
 from app.main import app
-from app.market import CAPACITY, FARES, N_PERIODS
+from app.market import CAPACITY, FARES, NO_FARE, N_PERIODS
 from app.myopic import DemandModelNotTrainedError, myopic_decision
 from app.optimized import (
     TERMINAL_PERIOD,
@@ -101,6 +101,10 @@ def test_value_equals_max_candidate_total_and_policy_is_argmax() -> None:
                 if value > best_value + 1e-9:
                     best_value = value
                     best_index = fare_index
+            if remaining == 0:
+                assert int(solution.policy[period, remaining]) == NO_FARE
+                assert abs(float(solution.value[period, remaining])) < 1e-9
+                continue
             assert abs(float(solution.value[period, remaining]) - best_value) < 1e-9
             assert int(solution.policy[period, remaining]) == int(fares[best_index])
             assert int(solution.policy[period, remaining]) in fares
@@ -153,7 +157,12 @@ def test_last_period_matches_myopic() -> None:
         optimized = optimized_decision(9, cumulative_bookings)
         myopic = myopic_decision(9, cumulative_bookings)
         assert optimized.selected_fare == myopic.selected_fare
-        assert optimized.selected_fare in FARES.tolist()
+        if cumulative_bookings == CAPACITY:
+            assert optimized.selected_fare is None
+            assert optimized.expected_sales == 0.0
+            assert optimized.total_value == 0.0
+        else:
+            assert optimized.selected_fare in FARES.tolist()
         assert abs(optimized.future_value) < 1e-12
 
 

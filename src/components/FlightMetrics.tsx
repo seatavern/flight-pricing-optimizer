@@ -1,3 +1,5 @@
+import { offeredFareLabel } from "@/lib/offeredFare";
+
 type FlightMetricsProps = {
   period: number;
   seatsSold: string;
@@ -5,6 +7,7 @@ type FlightMetricsProps = {
   loadFactor: string;
   revenue: string;
   selectedFare: number | null;
+  soldOut?: boolean;
   fareLabel: string;
   seatsSoldDelta?: number | null;
   remainingDelta?: number | null;
@@ -22,7 +25,7 @@ function Metric({
   accent?: string | null;
 }) {
   return (
-    <div className="min-w-[5.5rem]">
+    <div className="min-w-0">
       <div className="relative w-fit">
         <p className="text-[30px] font-medium leading-none tracking-tight tabular-nums text-navy">
           {value}
@@ -33,7 +36,7 @@ function Metric({
           </p>
         ) : null}
       </div>
-      <p className="mt-2 text-[10px] font-medium tracking-[0.16em] text-muted">
+      <p className="mt-2 whitespace-nowrap text-[10px] font-medium tracking-[0.16em] text-muted">
         {label}
       </p>
     </div>
@@ -55,6 +58,7 @@ export function FlightMetrics({
   loadFactor,
   revenue,
   selectedFare,
+  soldOut = false,
   fareLabel,
   seatsSoldDelta = null,
   remainingDelta = null,
@@ -77,7 +81,7 @@ export function FlightMetrics({
           {period === 0 ? "Flight departed" : "Current selling period"}
         </p>
       </div>
-      <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-x-6 gap-y-4 pt-1">
+      <div className="grid min-w-0 flex-1 grid-cols-2 items-start gap-x-4 gap-y-4 pt-1 sm:grid-cols-3 xl:grid-cols-5">
         <Metric value={seatsSold} label="SEATS SOLD" accent={formatDelta(seatsSoldDelta)} />
         <Metric value={remaining} label="REMAINING" accent={formatDelta(remainingDelta)} />
         <Metric
@@ -91,7 +95,7 @@ export function FlightMetrics({
           accent={formatDelta(revenueDelta, true)}
         />
         <Metric
-          value={selectedFare === null ? "—" : `$${selectedFare}`}
+          value={offeredFareLabel(selectedFare, soldOut)}
           label={fareLabel}
         />
       </div>

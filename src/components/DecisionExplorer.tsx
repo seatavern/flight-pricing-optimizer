@@ -11,6 +11,7 @@ import {
   FLIGHT,
   type Fare,
 } from "@/lib/constants";
+import { offeredFareLabel } from "@/lib/offeredFare";
 import { fetchExplorerDecision, type ExplorerCandidate, type ExplorerDecision } from "@/lib/pricingApi";
 
 const SELLING_PERIODS = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1] as const;
@@ -40,7 +41,8 @@ function money(value: number, signed = false): string {
   return `$${abs}`;
 }
 
-function findFare(candidates: ExplorerCandidate[], fare: Fare): ExplorerCandidate | null {
+function findFare(candidates: ExplorerCandidate[], fare: Fare | null): ExplorerCandidate | null {
+  if (fare === null) return null;
   return candidates.find((row) => row.fare === fare) ?? null;
 }
 
@@ -191,7 +193,7 @@ export function DecisionExplorer() {
         <div className="border border-line bg-panel px-4 py-3">
           <p className="text-[11px] font-semibold tracking-[0.16em] text-muted">MYOPIC</p>
           <p className="mt-1 text-[30px] font-medium leading-none tabular-nums text-navy">
-            {decision ? `$${decision.myopic_selected_fare}` : "—"}
+            {decision ? offeredFareLabel(decision.myopic_selected_fare, decision.remaining_capacity === 0) : "—"}
           </p>
           <p className="mt-2 text-[13px] leading-5 text-muted">
             Maximizes expected revenue this period
@@ -200,7 +202,7 @@ export function DecisionExplorer() {
         <div className="border border-line bg-panel px-4 py-3">
           <p className="text-[11px] font-semibold tracking-[0.16em] text-muted">OPTIMIZED</p>
           <p className="mt-1 text-[30px] font-medium leading-none tabular-nums text-navy">
-            {decision ? `$${decision.optimized_selected_fare}` : "—"}
+            {decision ? offeredFareLabel(decision.optimized_selected_fare, decision.remaining_capacity === 0) : "—"}
           </p>
           <p className="mt-2 text-[13px] leading-5 text-muted">
             Balances revenue now with the future value of remaining seats
@@ -307,7 +309,7 @@ export function DecisionExplorer() {
             <thead>
               <tr className="border-b border-line text-[10px] font-semibold tracking-[0.14em] text-muted">
                 <th className="px-3 py-2">FARE</th>
-                <th className="px-3 py-2 text-right">ML PREDICTED BOOKINGS</th>
+                <th className="px-3 py-2 text-right">ML LATENT MEAN</th>
                 <th className="px-3 py-2 text-right">EXPECTED SALES</th>
                 <th className="px-3 py-2 text-right">REVENUE NOW</th>
                 <th
@@ -425,8 +427,8 @@ export function DecisionExplorer() {
         <div>
           <h2 className="text-[11px] font-semibold tracking-[0.18em] text-muted">MODEL INPUTS</h2>
           <p className="mt-2 max-w-sm text-[13px] leading-5 text-muted">
-            The demand model predicts expected bookings for each candidate fare from the observable
-            flight state.
+            The demand model predicts unconstrained latent demand for each candidate fare from the
+            observable flight state. Expected sales then apply remaining seats once.
           </p>
           <dl className="mt-4 space-y-2 text-[13px] text-navy">
             <div className="flex justify-between gap-4 border-b border-line pb-2">
@@ -502,7 +504,7 @@ function PolicyValue({
   futureLabel,
 }: {
   title: string;
-  fare: number;
+  fare: number | null;
   immediate: number;
   future: number;
   total: number;
@@ -511,8 +513,10 @@ function PolicyValue({
   return (
     <div>
       <p className="text-[11px] font-semibold tracking-[0.14em] text-muted">{title}</p>
-      <p className="mt-1 text-[30px] font-medium leading-none tabular-nums text-navy">${fare}</p>
-      <p className="mt-1 text-[12px] text-muted">selected fare</p>
+      <p className="mt-1 text-[30px] font-medium leading-none tabular-nums text-navy">
+        {offeredFareLabel(fare, fare === null)}
+      </p>
+      <p className="mt-1 text-[12px] text-muted">{fare === null ? "no seats remaining" : "selected fare"}</p>
       <dl className="mt-3 space-y-2 text-[13px] text-navy">
         <div>
           <dt className="text-[10px] font-medium tracking-[0.14em] text-muted">

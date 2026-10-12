@@ -6,7 +6,7 @@ import time
 import numpy as np
 
 from app.demand_model import get_active_model, predict_mean_batch
-from app.market import CAPACITY, FARES, N_PERIODS
+from app.market import CAPACITY, FARES, NO_FARE, N_PERIODS
 from app.myopic import DemandModelNotTrainedError
 from app.poisson_expectation import capped_poisson_probabilities
 
@@ -42,8 +42,8 @@ class OptimizedCandidate:
 
 @dataclass(frozen=True)
 class OptimizedDecision:
-    selected_fare: int
-    predicted_mu: float
+    selected_fare: int | None
+    predicted_mu: float | None
     expected_sales: float
     immediate_expected_revenue: float
     future_value: float
@@ -91,7 +91,7 @@ def solve_bellman(model=None) -> BellmanSolution:
 
     predicted_mu = _precompute_predicted_mu(fitted)
     value = np.zeros((TERMINAL_PERIOD + 1, n_capacity), dtype=np.float64)
-    policy = np.full((N_PERIODS, n_capacity), fares[0], dtype=np.int64)
+    policy = np.full((N_PERIODS, n_capacity), NO_FARE, dtype=np.int64)
     action_value = np.zeros((N_PERIODS, n_capacity, n_fares), dtype=np.float64)
     expected_sales = np.zeros((N_PERIODS, n_capacity, n_fares), dtype=np.float64)
     immediate_expected_revenue = np.zeros((N_PERIODS, n_capacity, n_fares), dtype=np.float64)
@@ -101,7 +101,7 @@ def solve_bellman(model=None) -> BellmanSolution:
         next_value = value[period + 1]
         for remaining in range(n_capacity):
             if remaining == 0:
-                policy[period, 0] = fares[0]
+                policy[period, 0] = NO_FARE
                 continue
             quantities = np.arange(remaining + 1, dtype=np.float64)
             continuation = next_value[remaining - np.arange(remaining + 1)]
@@ -170,6 +170,17 @@ def optimized_decision(period: int, cumulative_bookings: int) -> OptimizedDecisi
         _candidate_at(solution, period, remaining, fare_index)
         for fare_index in range(int(FARES.shape[0]))
     )
+    if remaining == 0:
+        return OptimizedDecision(
+            selected_fare=None,
+            predicted_mu=None,
+            expected_sales=0.0,
+            immediate_expected_revenue=0.0,
+            future_value=0.0,
+            total_value=0.0,
+            candidates=candidates,
+        )
+
     selected_fare = int(solution.policy[period, remaining])
     selected = next(row for row in candidates if row.fare == selected_fare)
     return OptimizedDecision(

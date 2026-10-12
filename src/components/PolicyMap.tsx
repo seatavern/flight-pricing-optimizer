@@ -81,7 +81,14 @@ function rgbToHex(r: number, g: number, b: number): string {
 }
 
 function cellColor(mode: ViewMode, state: PolicyMapState): string {
-  if (state.remaining_capacity === 0) return "#eef2f6";
+  if (
+    state.remaining_capacity === 0 ||
+    state.myopic_fare === null ||
+    state.optimized_fare === null ||
+    state.fare_difference === null
+  ) {
+    return "#eef2f6";
+  }
   if (mode === "myopic") return FARE_COLORS[state.myopic_fare];
   if (mode === "optimized") return FARE_COLORS[state.optimized_fare];
   return differenceColor(state.fare_difference);
@@ -122,7 +129,10 @@ export function PolicyMap() {
   const summary = useMemo(() => {
     if (!states) return null;
     const priced = states.filter((row) => row.remaining_capacity > 0);
-    const disagree = priced.filter((row) => row.fare_difference !== 0);
+    const disagree = priced.filter(
+      (row): row is PolicyMapState & { fare_difference: number } =>
+        row.fare_difference !== null && row.fare_difference !== 0,
+    );
     const higher = disagree.filter((row) => row.fare_difference > 0).length;
     const lower = disagree.filter((row) => row.fare_difference < 0).length;
     const avgAbs =
@@ -371,11 +381,19 @@ export function PolicyMap() {
                 <dt className="text-muted">SOLD</dt>
                 <dd className="tabular-nums">{CAPACITY - hoveredState.remaining_capacity} seats</dd>
                 <dt className="text-muted">MYOPIC</dt>
-                <dd className="tabular-nums">${hoveredState.myopic_fare}</dd>
+                <dd className="tabular-nums">
+                  {hoveredState.myopic_fare === null ? "SOLD OUT" : `$${hoveredState.myopic_fare}`}
+                </dd>
                 <dt className="text-muted">OPTIMIZED</dt>
-                <dd className="tabular-nums">${hoveredState.optimized_fare}</dd>
+                <dd className="tabular-nums">
+                  {hoveredState.optimized_fare === null ? "SOLD OUT" : `$${hoveredState.optimized_fare}`}
+                </dd>
                 <dt className="text-muted">DIFFERENCE</dt>
-                <dd className="tabular-nums">{formatDifference(hoveredState.fare_difference)}</dd>
+                <dd className="tabular-nums">
+                  {hoveredState.fare_difference === null
+                    ? "—"
+                    : formatDifference(hoveredState.fare_difference)}
+                </dd>
               </dl>
             )}
           </div>

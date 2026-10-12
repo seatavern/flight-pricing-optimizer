@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.demand_model import HIDDEN_VARIABLES, train_demand_model
 from app.main import app
-from app.market import CAPACITY, N_PERIODS
+from app.market import CAPACITY, NO_FARE, N_PERIODS
 from app.myopic import myopic_decision
 from app.myopic_evaluation import get_myopic_policy_value
 from app.optimized import get_bellman_solution, optimized_decision
@@ -44,7 +44,11 @@ def test_policy_map_covers_full_state_space() -> None:
     for row in states:
         assert set(row.keys()) == STATE_KEYS
         assert HIDDEN_KEYS.isdisjoint(row.keys())
-        assert row["fare_difference"] == row["optimized_fare"] - row["myopic_fare"]
+        if row["myopic_fare"] is None or row["optimized_fare"] is None:
+            assert row["remaining_capacity"] == 0
+            assert row["fare_difference"] is None
+        else:
+            assert row["fare_difference"] == row["optimized_fare"] - row["myopic_fare"]
 
 
 def test_policy_map_fares_match_existing_policies() -> None:
@@ -70,8 +74,10 @@ def test_policy_map_fares_match_existing_policies() -> None:
         expected_optimized = optimized_decision(period, CAPACITY - remaining).selected_fare
         assert row["myopic_fare"] == expected_myopic
         assert row["optimized_fare"] == expected_optimized
-        assert row["myopic_fare"] == int(myopic_eval.policy[period, remaining])
-        assert row["optimized_fare"] == int(bellman.policy[period, remaining])
+        stored_myopic = int(myopic_eval.policy[period, remaining])
+        stored_optimized = int(bellman.policy[period, remaining])
+        assert stored_myopic == (NO_FARE if expected_myopic is None else expected_myopic)
+        assert stored_optimized == (NO_FARE if expected_optimized is None else expected_optimized)
 
 
 def test_period_nine_policies_agree_when_inventory_remains() -> None:
@@ -130,6 +136,8 @@ def test_zero_capacity_is_returned_without_changing_policy() -> None:
             for item in payload["states"]
             if item["period"] == period and item["remaining_capacity"] == 0
         )
-        assert row["myopic_fare"] == int(myopic_eval.policy[period, 0])
-        assert row["optimized_fare"] == int(bellman.policy[period, 0])
-        assert row["fare_difference"] == row["optimized_fare"] - row["myopic_fare"]
+        assert int(myopic_eval.policy[period, 0]) == NO_FARE
+        assert int(bellman.policy[period, 0]) == NO_FARE
+        assert row["myopic_fare"] is None
+        assert row["optimized_fare"] is None
+        assert row["fare_difference"] is None

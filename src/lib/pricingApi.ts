@@ -9,21 +9,27 @@ export type MyopicCandidate = {
   expected_revenue: number;
 };
 
-export type MyopicDecision = {
-  selected_fare: Fare;
+export type FarePrediction = {
+  fare: Fare;
   predicted_mu: number;
+};
+
+export type MyopicDecision = {
+  selected_fare: Fare | null;
+  predicted_mu: number | null;
   expected_sales: number;
   expected_revenue: number;
   candidates: MyopicCandidate[];
 };
 
 export type OptimizedDecision = {
-  selected_fare: Fare;
-  predicted_mu: number;
+  selected_fare: Fare | null;
+  predicted_mu: number | null;
   expected_sales: number;
   immediate_expected_revenue: number;
   future_value: number;
   total_value: number;
+  candidates: FarePrediction[];
 };
 
 function apiUrl(path: string): string {
@@ -32,6 +38,18 @@ function apiUrl(path: string): string {
 
 function isFare(value: number): value is Fare {
   return (FARES as readonly number[]).includes(value);
+}
+
+function readOfferedFare(value: unknown, message: string): Fare | null {
+  if (value === null) return null;
+  if (typeof value === "number" && isFare(value)) return value;
+  throw new ModelApiError(message);
+}
+
+function readOptionalMean(value: unknown, message: string): number | null {
+  if (value === null) return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  throw new ModelApiError(message);
 }
 
 function readCandidate(payload: Record<string, unknown>): MyopicCandidate {
@@ -80,15 +98,13 @@ export async function fetchMyopicDecision(
     throw new ModelApiError(`Myopic pricing failed (${response.status}).`);
   }
   const payload = await readModelJson(response);
-  const selectedFare = payload.selected_fare;
-  const predictedMu = payload.predicted_mu;
+  const selectedFare = readOfferedFare(payload.selected_fare, "Myopic response was missing fields.");
+  const predictedMu = readOptionalMean(payload.predicted_mu, "Myopic response was missing fields.");
   const expectedSales = payload.expected_sales;
   const expectedRevenue = payload.expected_revenue;
   const candidatesRaw = payload.candidates;
   if (
-    typeof selectedFare !== "number" ||
-    !isFare(selectedFare) ||
-    typeof predictedMu !== "number" ||
+    (selectedFare === null) !== (predictedMu === null) ||
     typeof expectedSales !== "number" ||
     typeof expectedRevenue !== "number" ||
     !Array.isArray(candidatesRaw)
@@ -145,17 +161,32 @@ export async function fetchOptimizedDecision(
     throw new ModelApiError(`Optimized pricing failed (${response.status}).`);
   }
   const payload = await readModelJson(response);
-  const selectedFare = payload.selected_fare;
-  if (typeof selectedFare !== "number" || !isFare(selectedFare)) {
+  const selectedFare = readOfferedFare(payload.selected_fare, "Optimized response was missing fields.");
+  const predictedMu = readOptionalMean(payload.predicted_mu, "Optimized response was missing fields.");
+  const candidatesRaw = payload.candidates;
+  if ((selectedFare === null) !== (predictedMu === null) || !Array.isArray(candidatesRaw)) {
     throw new ModelApiError("Optimized response was missing fields.");
   }
+  const candidates = candidatesRaw.map((row) => {
+    if (row === null || typeof row !== "object" || Array.isArray(row)) {
+      throw new ModelApiError("Optimized candidate was invalid.");
+    }
+    const record = row as Record<string, unknown>;
+    const fare = record.fare;
+    const mean = record.predicted_mu;
+    if (typeof fare !== "number" || !isFare(fare) || typeof mean !== "number" || !Number.isFinite(mean)) {
+      throw new ModelApiError("Optimized candidate was invalid.");
+    }
+    return { fare, predicted_mu: mean };
+  });
   return {
     selected_fare: selectedFare,
-    predicted_mu: readNumber(payload, "predicted_mu"),
+    predicted_mu: predictedMu,
     expected_sales: readNumber(payload, "expected_sales"),
     immediate_expected_revenue: readNumber(payload, "immediate_expected_revenue"),
     future_value: readNumber(payload, "future_value"),
     total_value: readNumber(payload, "total_value"),
+    candidates,
   };
 }
 
@@ -172,11 +203,11 @@ export type ExplorerDecision = {
   period: number;
   remaining_capacity: number;
   cumulative_bookings: number;
-  myopic_selected_fare: Fare;
+  myopic_selected_fare: Fare | null;
   myopic_immediate_expected_revenue: number;
   myopic_continuation_value: number;
   myopic_total_policy_value: number;
-  optimized_selected_fare: Fare;
+  optimized_selected_fare: Fare | null;
   optimized_immediate_expected_revenue: number;
   optimized_continuation_value: number;
   optimized_total_policy_value: number;
@@ -225,17 +256,16 @@ export async function fetchExplorerDecision(
     throw new ModelApiError(`Decision lookup failed (${response.status}).`);
   }
   const payload = await readModelJson(response);
-  const myopicFare = payload.myopic_selected_fare;
-  const optimizedFare = payload.optimized_selected_fare;
+  const myopicFare = readOfferedFare(payload.myopic_selected_fare, "Decision response was missing fields.");
+  const optimizedFare = readOfferedFare(
+    payload.optimized_selected_fare,
+    "Decision response was missing fields.",
+  );
   const candidatesRaw = payload.candidates;
   if (
     typeof payload.period !== "number" ||
     typeof payload.remaining_capacity !== "number" ||
     typeof payload.cumulative_bookings !== "number" ||
-    typeof myopicFare !== "number" ||
-    !isFare(myopicFare) ||
-    typeof optimizedFare !== "number" ||
-    !isFare(optimizedFare) ||
     !Array.isArray(candidatesRaw)
   ) {
     throw new ModelApiError("Decision response was missing fields.");
@@ -268,9 +298,9 @@ export async function fetchExplorerDecision(
 export type PolicyMapState = {
   period: number;
   remaining_capacity: number;
-  myopic_fare: Fare;
-  optimized_fare: Fare;
-  fare_difference: number;
+  myopic_fare: Fare | null;
+  optimized_fare: Fare | null;
+  fare_difference: number | null;
 };
 
 export type PolicyMap = {
@@ -278,16 +308,30 @@ export type PolicyMap = {
 };
 
 function readPolicyMapState(payload: Record<string, unknown>): PolicyMapState {
-  const myopicFare = payload.myopic_fare;
-  const optimizedFare = payload.optimized_fare;
+  if (typeof payload.period !== "number" || typeof payload.remaining_capacity !== "number") {
+    throw new ModelApiError("Policy map state was invalid.");
+  }
+  const myopicFare = readOfferedFare(payload.myopic_fare, "Policy map state was invalid.");
+  const optimizedFare = readOfferedFare(payload.optimized_fare, "Policy map state was invalid.");
+  const difference = payload.fare_difference;
+  const soldOut = payload.remaining_capacity === 0;
+  if (soldOut) {
+    if (myopicFare !== null || optimizedFare !== null || difference !== null) {
+      throw new ModelApiError("Policy map state was invalid.");
+    }
+    return {
+      period: payload.period,
+      remaining_capacity: 0,
+      myopic_fare: null,
+      optimized_fare: null,
+      fare_difference: null,
+    };
+  }
   if (
-    typeof payload.period !== "number" ||
-    typeof payload.remaining_capacity !== "number" ||
-    typeof myopicFare !== "number" ||
-    !isFare(myopicFare) ||
-    typeof optimizedFare !== "number" ||
-    !isFare(optimizedFare) ||
-    typeof payload.fare_difference !== "number"
+    myopicFare === null ||
+    optimizedFare === null ||
+    typeof difference !== "number" ||
+    difference !== optimizedFare - myopicFare
   ) {
     throw new ModelApiError("Policy map state was invalid.");
   }
@@ -296,7 +340,7 @@ function readPolicyMapState(payload: Record<string, unknown>): PolicyMapState {
     remaining_capacity: payload.remaining_capacity,
     myopic_fare: myopicFare,
     optimized_fare: optimizedFare,
-    fare_difference: payload.fare_difference,
+    fare_difference: difference,
   };
 }
 

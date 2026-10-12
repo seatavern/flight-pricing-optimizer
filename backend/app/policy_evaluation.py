@@ -17,7 +17,7 @@ from app.demand_model import (
     predict_mean_batch,
     train_demand_model,
 )
-from app.market import CAPACITY, FARES, N_PERIODS, sample_strength, true_market_mean
+from app.market import CAPACITY, FARES, NO_FARE, N_PERIODS, sample_strength, true_market_mean
 from app.myopic import myopic_decision
 from app.optimized import get_bellman_solution, optimized_decision
 from app.poisson_expectation import expected_min_poisson
@@ -98,6 +98,9 @@ def build_myopic_policy_table() -> np.ndarray:
     table = np.empty((N_PERIODS, n_cap), dtype=np.int64)
     for period in range(N_PERIODS):
         for remaining in range(n_cap):
+            if remaining == 0:
+                table[period, remaining] = NO_FARE
+                continue
             best_fare = FIXED_FARES[0]
             best_revenue = -1.0
             for fare_index, fare in enumerate(FIXED_FARES):
@@ -118,6 +121,10 @@ def simulate_path(strength: float, uniforms: np.ndarray, fare_at: FareFn) -> dic
     remaining_start: list[int] = []
     for period in range(N_PERIODS):
         remaining_start.append(remaining)
+        if remaining == 0:
+            fares.append(NO_FARE)
+            sales.append(0)
+            continue
         fare = int(fare_at(period, remaining))
         if fare not in FIXED_FARES:
             raise RuntimeError(f"policy selected off-grid fare {fare}")
@@ -161,9 +168,11 @@ def _fare_fn(name: str, myopic_policy: np.ndarray, optimized_policy: np.ndarray)
 
 
 def _fare_pct(values: np.ndarray) -> dict[str, float]:
-    flat = values.ravel().tolist()
-    n = len(flat)
-    counts = Counter(int(value) for value in flat)
+    offered = [int(value) for value in values.ravel().tolist() if int(value) in FIXED_FARES]
+    n = len(offered)
+    counts = Counter(offered)
+    if n == 0:
+        return {str(fare): 0.0 for fare in FIXED_FARES}
     return {str(fare): 100.0 * counts.get(fare, 0) / n for fare in FIXED_FARES}
 
 

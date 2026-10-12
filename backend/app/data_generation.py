@@ -15,7 +15,9 @@ from app.market import (
 )
 
 OBSERVABLE_FEATURES = ("period", "fare", "cumulative_bookings")
-TARGET_NAME = "realized_bookings"
+# Latent Poisson draws, not capacity-censored sales. Pricing applies remaining
+# seats once when it turns this mean into expected sales.
+TARGET_NAME = "latent_demand"
 
 
 @dataclass(frozen=True)
@@ -33,6 +35,11 @@ class TrainingDataset:
         return np.column_stack(
             (self.period, self.fare, self.cumulative_bookings)
         )
+
+    def target(self) -> np.ndarray:
+        if TARGET_NAME != "latent_demand":
+            raise RuntimeError(f"unsupported training target {TARGET_NAME}")
+        return np.asarray(self.diagnostics["latent_demand"], dtype=np.float64)
 
 
 def generate_training_data(

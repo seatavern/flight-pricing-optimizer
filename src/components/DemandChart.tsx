@@ -27,12 +27,15 @@ export function DemandChart({
   sampling = false,
 }: DemandChartProps) {
   const showMl = mlPredictedMean !== null && Number.isFinite(mlPredictedMean);
-  const maxK = Math.max(
+  const neededK = Math.max(
     CHART_MAX_BOOKINGS,
     poissonSupportMax(mu),
     showMl ? poissonSupportMax(mlPredictedMean) : 0,
     realizedBookings ?? 0,
   );
+  const axisRef = useRef(neededK);
+  if (neededK > axisRef.current) axisRef.current = neededK;
+  const maxK = axisRef.current;
   const truePmf = poissonPmfs(mu, maxK);
   const mlPmf = showMl ? poissonPmfs(mlPredictedMean, maxK) : null;
   const peak = Math.max(...truePmf, ...(mlPmf ?? []), 0);
@@ -247,7 +250,7 @@ export function DemandChart({
         className="text-muted"
         fontSize="11"
       >
-        {`Bookings during ${chartPeriod}`}
+        {`Demand during ${chartPeriod}`}
       </text>
     </svg>
   );

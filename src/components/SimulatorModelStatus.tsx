@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { offeredFareLabel } from "@/lib/offeredFare";
 import type { PricingStrategy } from "@/lib/types";
 import type { ModelStatus } from "@/lib/modelApi";
 
@@ -7,6 +8,7 @@ type SimulatorModelStatusProps = {
   status: ModelStatus;
   error: string | null;
   optimizedFare?: number | null;
+  soldOut?: boolean;
   immediateExpectedRevenue?: number | null;
   futureValue?: number | null;
   totalValue?: number | null;
@@ -31,6 +33,7 @@ export function SimulatorModelStatus({
   status,
   error,
   optimizedFare = null,
+  soldOut = false,
   immediateExpectedRevenue = null,
   futureValue = null,
   totalValue = null,
@@ -44,7 +47,7 @@ export function SimulatorModelStatus({
       {showOptimizedDetails ? (
         <div className="mb-4 max-w-xs">
           <p className="text-[24px] font-medium leading-none tabular-nums text-navy">
-            {optimizedFare === null ? "—" : `$${optimizedFare}`}
+            {offeredFareLabel(optimizedFare, soldOut)}
           </p>
           <p className="mt-1.5 text-[10px] font-medium tracking-[0.14em] text-muted">
             OPTIMIZED FARE

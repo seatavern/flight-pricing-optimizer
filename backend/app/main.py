@@ -62,8 +62,8 @@ class MyopicCandidate(BaseModel):
 
 class MyopicResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    selected_fare: int
-    predicted_mu: float
+    selected_fare: int | None
+    predicted_mu: float | None
     expected_sales: float
     expected_revenue: float
     candidates: list[MyopicCandidate]
@@ -87,8 +87,8 @@ class OptimizedCandidate(BaseModel):
 
 class OptimizedResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    selected_fare: int
-    predicted_mu: float
+    selected_fare: int | None
+    predicted_mu: float | None
     expected_sales: float
     immediate_expected_revenue: float
     future_value: float
@@ -165,11 +165,11 @@ class DecisionResponse(BaseModel):
     period: int
     remaining_capacity: int
     cumulative_bookings: int
-    myopic_selected_fare: int
+    myopic_selected_fare: int | None
     myopic_immediate_expected_revenue: float
     myopic_continuation_value: float
     myopic_total_policy_value: float
-    optimized_selected_fare: int
+    optimized_selected_fare: int | None
     optimized_immediate_expected_revenue: float
     optimized_continuation_value: float
     optimized_total_policy_value: float
@@ -188,9 +188,9 @@ class PolicyMapState(BaseModel):
     model_config = ConfigDict(extra="forbid")
     period: int
     remaining_capacity: int
-    myopic_fare: int
-    optimized_fare: int
-    fare_difference: int
+    myopic_fare: int | None
+    optimized_fare: int | None
+    fare_difference: int | None
 
 
 class PolicyMapResponse(BaseModel):

@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from app.demand_model import HIDDEN_VARIABLES, train_demand_model
 from app.main import app
-from app.market import CAPACITY, FARES, N_PERIODS
+from app.market import CAPACITY, FARES, NO_FARE, N_PERIODS
 from app.myopic import myopic_decision
 from app.myopic_evaluation import get_myopic_policy_value
 from app.optimized import get_bellman_solution, optimized_decision
@@ -22,7 +22,8 @@ def test_myopic_policy_uses_existing_decision_rule_everywhere() -> None:
     for period in (0, 2, 4, 9):
         for remaining in (0, 1, 25, 48, 100):
             expected = myopic_decision(period, CAPACITY - remaining).selected_fare
-            assert int(evaluation.policy[period, remaining]) == expected
+            stored = int(evaluation.policy[period, remaining])
+            assert stored == (NO_FARE if expected is None else expected)
 
 
 def test_myopic_policy_value_matches_immediate_plus_continuation() -> None:

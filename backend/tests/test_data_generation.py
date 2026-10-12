@@ -33,7 +33,7 @@ def test_observable_features_are_only_period_fare_and_cumulative_bookings() -> N
     np.testing.assert_array_equal(matrix[:, 2], data.cumulative_bookings)
     hidden = {"strength", "expected_fare", "expected_bookings", "elasticity", "mu"}
     assert hidden.isdisjoint(data.feature_names())
-    assert TARGET_NAME == "realized_bookings"
+    assert TARGET_NAME == "latent_demand"
     assert TARGET_NAME not in data.feature_names()
 
 

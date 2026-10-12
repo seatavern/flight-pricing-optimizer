@@ -5,7 +5,7 @@ import inspect
 import numpy as np
 
 from app.demand_model import TEST_SEED, TRAIN_SEED, train_demand_model
-from app.market import CAPACITY, FARES, N_PERIODS, true_market_mean
+from app.market import CAPACITY, FARES, NO_FARE, N_PERIODS, true_market_mean
 from app.myopic import myopic_decision
 from app.optimized import optimized_decision
 from app.policy_evaluation import (
@@ -78,8 +78,11 @@ def test_small_paired_evaluation_invariants() -> None:
         assert row["mean_unsold_seats"] >= 0.0
     myopic_policy = build_myopic_policy_table()
     assert myopic_policy.shape == (N_PERIODS, CAPACITY + 1)
-    assert set(myopic_policy.ravel().tolist()).issubset(set(FIXED_FARES))
+    assert set(myopic_policy.ravel().tolist()).issubset(set(FIXED_FARES) | {NO_FARE})
     for period, remaining in ((0, 100), (2, 48), (9, 1), (9, 20), (4, 0)):
         expected = myopic_decision(period, CAPACITY - remaining).selected_fare
-        assert int(myopic_policy[period, remaining]) == expected
+        if expected is None:
+            assert int(myopic_policy[period, remaining]) == NO_FARE
+        else:
+            assert int(myopic_policy[period, remaining]) == expected
     assert result["validation"]["t1_optimized_matches_myopic"]

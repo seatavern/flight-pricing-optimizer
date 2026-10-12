@@ -11,7 +11,18 @@ import { SimulationControls } from "@/components/SimulationControls";
 import { StrategySelector } from "@/components/StrategySelector";
 import { Timeline } from "@/components/Timeline";
 import { DEFAULT_FARE, FLIGHT, type Fare } from "@/lib/constants";
-import { sampleHiddenStrength, trueMarketMean, uiPeriodToModelIndex } from "@/lib/market";
+import {
+  applyStrengthOnReset,
+  createFlightMarket,
+  INITIAL_MARKET_STRENGTH,
+  initialStrengthSelection,
+  isStrengthPending,
+  randomizeStrength,
+  strengthAfterStrategyChange,
+  trueMarketMean,
+  uiPeriodToModelIndex,
+  type FlightMarket,
+} from "@/lib/market";
 import { samplePoisson } from "@/lib/poisson";
 import { fetchMyopicDecision, fetchOptimizedDecision } from "@/lib/pricingApi";
 import { SEAT_IDS_FRONT_TO_BACK } from "@/lib/seats";
@@ -25,8 +36,8 @@ import {
 import type { PeriodSnapshot, PricingStrategy } from "@/lib/types";
 import { useDemandModel } from "@/lib/useDemandModel";
 
-let activeStrength: number | null = null;
-let allowClientStrength = false;
+let activeStrength = INITIAL_MARKET_STRENGTH;
+let activeMarket: FlightMarket | null = null;
 const strengthListeners = new Set<() => void>();
 
 function subscribeStrength(listener: () => void) {
@@ -37,17 +48,40 @@ function subscribeStrength(listener: () => void) {
 }
 
 function getActiveStrength() {
-  return allowClientStrength ? activeStrength : null;
+  return activeStrength;
 }
 
 function getServerStrength() {
-  return null;
+  return INITIAL_MARKET_STRENGTH;
 }
 
-function beginFlight() {
-  allowClientStrength = true;
-  activeStrength = sampleHiddenStrength();
+function notifyStrength() {
   strengthListeners.forEach((listener) => listener());
+}
+
+function flightSeed(): number {
+  return (Math.random() * 0x100000000) >>> 0;
+}
+
+function ensureActiveMarket(): FlightMarket {
+  if (activeMarket === null) {
+    activeMarket = createFlightMarket(flightSeed(), 10, activeStrength);
+  }
+  return activeMarket;
+}
+
+function beginFlight(strength: number) {
+  activeStrength = strength;
+  activeMarket = createFlightMarket(flightSeed(), 10, strength);
+  notifyStrength();
+}
+
+function lastOfferedFare(history: readonly PeriodSnapshot[], beforeIndex: number): number | null {
+  for (let index = beforeIndex; index >= 0; index -= 1) {
+    const fare = history[index]?.selectedFare;
+    if (fare !== null && fare !== undefined) return fare;
+  }
+  return null;
 }
 
 function emptySnapshot(strategy: PricingStrategy): PeriodSnapshot {
@@ -116,27 +150,34 @@ function metricDisplay(
   return formatMetricValue(to, money, suffix);
 }
 
-function samplePeriodDemand(mu: number) {
-  return samplePoisson(mu, Math.random());
+function samplePeriodDemand(mu: number, modelIndex: number) {
+  const uniform = ensureActiveMarket().uniforms[modelIndex] ?? Math.random();
+  return samplePoisson(mu, uniform);
 }
 
 export function FlightSimulator() {
   const [strategy, setStrategy] = useState<PricingStrategy>("fixed");
+  const [selectedStrength, setSelectedStrength] = useState(initialStrengthSelection().selected);
   const strength = useSyncExternalStore(subscribeStrength, getActiveStrength, getServerStrength);
   const [history, setHistory] = useState<PeriodSnapshot[]>(() => [emptySnapshot("fixed")]);
   const [viewIndex, setViewIndex] = useState(0);
   const [pricingError, setPricingError] = useState<string | null>(null);
   const [realization, setRealization] = useState<PeriodRealization | null>(null);
   const realizingRef = useRef(false);
+  const shownDemandRef = useRef({
+    trueMarketMean: null as number | null,
+    mlPredictedMean: null as number | null,
+    selectedFare: DEFAULT_FARE as number | null,
+    soldOut: false,
+    fareKind: "fixed" as PricingStrategy,
+    showMlMean: false,
+    realizedBookings: null as number | null,
+  });
   const demandModel = useDemandModel();
 
   useEffect(() => {
-    allowClientStrength = true;
-    if (activeStrength === null) {
-      beginFlight();
-      return;
-    }
-    strengthListeners.forEach((listener) => listener());
+    ensureActiveMarket();
+    notifyStrength();
   }, []);
 
   const snapshot = history[viewIndex] ?? emptySnapshot(strategy);
@@ -145,10 +186,14 @@ export function FlightSimulator() {
   const { seatsSold, remaining, loadFactor } = flightMetrics(snapshot);
   const modelIndex = uiPeriodToModelIndex(snapshot.period);
   const modelReady = demandModel.status.status === "ready";
+  const liveSoldOut = isAtLiveEdge && remaining === 0 && snapshot.realizedBookings === null;
+  const referenceFare =
+    snapshot.selectedFare ??
+    (remaining === 0 ? lastOfferedFare(history, viewIndex - 1) : null);
   const liveTrueMean =
-    modelIndex === null || strength === null || snapshot.selectedFare === null
+    modelIndex === null || strength === null || referenceFare === null
       ? null
-      : trueMarketMean(snapshot.selectedFare, modelIndex, strength);
+      : trueMarketMean(referenceFare, modelIndex, strength);
   const displayTrueMean = snapshot.trueMarketMean ?? liveTrueMean;
   const occupiedSet = new Set(snapshot.occupiedSeatIds);
 
@@ -162,7 +207,7 @@ export function FlightSimulator() {
     snapshot.period > 0 &&
     snapshot.realizedBookings === null &&
     strength !== null &&
-    snapshot.selectedFare !== null;
+    (snapshot.selectedFare !== null || liveSoldOut);
 
   const needsLiveDecision =
     (strategy === "myopic" || strategy === "optimized") &&
@@ -170,6 +215,7 @@ export function FlightSimulator() {
     isAtLiveEdge &&
     snapshot.period > 0 &&
     snapshot.selectedFare === null &&
+    snapshot.mlPredictedMean === null &&
     modelIndex !== null;
 
   useEffect(() => {
@@ -183,8 +229,16 @@ export function FlightSimulator() {
       .then((decision) => {
         if (cancelled) return;
         setPricingError(null);
+        const offeredFare = decision.selected_fare;
+        const fareForMean =
+          offeredFare ?? lastOfferedFare(history, history.length - 1);
+        const matched = decision.candidates.find((candidate) => candidate.fare === fareForMean);
+        const predictedMu =
+          offeredFare !== null ? (decision.predicted_mu ?? matched?.predicted_mu ?? 0) : (matched?.predicted_mu ?? 0);
         const trueMu =
-          strength === null ? null : trueMarketMean(decision.selected_fare, modelIndex, strength);
+          strength === null || fareForMean === null
+            ? null
+            : trueMarketMean(fareForMean, modelIndex, strength);
         const optimizedValues =
           strategy === "optimized" && "total_value" in decision
             ? {
@@ -199,16 +253,21 @@ export function FlightSimulator() {
               };
         setHistory((current) => {
           const live = current[current.length - 1];
-          if (!live || live.selectedFare !== null || live.period !== snapshot.period) {
+          if (
+            !live ||
+            live.selectedFare !== null ||
+            live.mlPredictedMean !== null ||
+            live.period !== snapshot.period
+          ) {
             return current;
           }
           return [
             ...current.slice(0, -1),
             {
               ...live,
-              selectedFare: decision.selected_fare,
+              selectedFare: offeredFare,
               fareKind: strategy,
-              mlPredictedMean: decision.predicted_mu,
+              mlPredictedMean: predictedMu,
               trueMarketMean: trueMu,
               ...optimizedValues,
             },
@@ -228,7 +287,7 @@ export function FlightSimulator() {
     return () => {
       cancelled = true;
     };
-  }, [needsLiveDecision, strategy, modelIndex, seatsSold, snapshot.period, strength]);
+  }, [needsLiveDecision, strategy, modelIndex, seatsSold, snapshot.period, strength, history]);
 
   useEffect(() => {
     const phase = realization?.phase;
@@ -333,12 +392,14 @@ export function FlightSimulator() {
   }, []);
 
   function handleSimulate() {
-    if (!canSimulate || realizingRef.current || snapshot.selectedFare === null) return;
-    const fare = snapshot.selectedFare;
+    if (!canSimulate || realizingRef.current) return;
+    if (!liveSoldOut && snapshot.selectedFare === null) return;
+    const fare = liveSoldOut ? null : snapshot.selectedFare;
     const mu = displayTrueMean;
-    if (mu === null) return;
+    if (mu === null && !liveSoldOut) return;
 
-    const demand = samplePeriodDemand(mu);
+    const demand =
+      mu === null || modelIndex === null ? 0 : samplePeriodDemand(mu, modelIndex);
     const booked = realizedSales(demand, remaining);
     const nextOccupied = [
       ...snapshot.occupiedSeatIds,
@@ -389,23 +450,29 @@ export function FlightSimulator() {
     });
   }
 
+  function handleRandomizeStrength() {
+    setSelectedStrength((current) => randomizeStrength({ selected: current, active: activeStrength }).selected);
+  }
+
   function handleReset() {
     if (realizingRef.current) return;
     realizingRef.current = false;
+    const applied = applyStrengthOnReset({ selected: selectedStrength, active: activeStrength });
     setRealization(null);
     setStrategy("fixed");
     setPricingError(null);
-    beginFlight();
+    beginFlight(applied.active);
     setHistory([emptySnapshot("fixed")]);
     setViewIndex(0);
   }
 
   function handleStrategyChange(next: PricingStrategy) {
     if (next === strategy || realizingRef.current) return;
+    const kept = strengthAfterStrategyChange({ selected: selectedStrength, active: activeStrength });
     setRealization(null);
     setStrategy(next);
     setPricingError(null);
-    beginFlight();
+    if (kept.active !== activeStrength) beginFlight(kept.active);
     setHistory([emptySnapshot(next)]);
     setViewIndex(0);
   }
@@ -436,12 +503,28 @@ export function FlightSimulator() {
   const showMetricDeltas =
     realization !== null &&
     (realization.phase === "consequences" || realization.phase === "hold");
+  const currentDemand = {
+    trueMarketMean: displayTrueMean,
+    mlPredictedMean: snapshot.mlPredictedMean,
+    selectedFare: (liveSoldOut ? null : snapshot.selectedFare) as number | null,
+    soldOut: liveSoldOut || (snapshot.selectedFare === null && remaining === 0),
+    fareKind: snapshot.fareKind,
+    showMlMean:
+      (snapshot.fareKind === "myopic" || snapshot.fareKind === "optimized") && modelReady,
+    realizedBookings: displayRealized,
+  };
+  if (!needsLiveDecision) shownDemandRef.current = currentDemand;
+  const shownDemand = needsLiveDecision ? shownDemandRef.current : currentDemand;
 
   return (
-    <div className="min-h-full bg-page px-6 py-3 lg:px-10 lg:py-3.5">
-      <Header />
+    <div className="min-h-full bg-page px-6 py-2.5 lg:px-10 lg:py-3">
+      <Header
+        marketStrength={selectedStrength}
+        strengthPending={isStrengthPending({ selected: selectedStrength, active: strength })}
+        onRandomizeStrength={handleRandomizeStrength}
+      />
 
-      <div className="mt-5 flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between xl:gap-8">
+      <div className="mt-4 flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between xl:gap-8">
         <FlightMetrics
           period={snapshot.period}
           seatsSold={metricDisplay(
@@ -471,8 +554,9 @@ export function FlightSimulator() {
             snapshot.revenue,
             true,
           )}
-          selectedFare={snapshot.selectedFare}
-          fareLabel={fareMetricLabel(snapshot.fareKind)}
+          selectedFare={shownDemand.selectedFare}
+          soldOut={shownDemand.soldOut}
+          fareLabel={fareMetricLabel(shownDemand.fareKind)}
           seatsSoldDelta={
             showMetricDeltas && realization
               ? realization.toSold - realization.fromSold
@@ -503,18 +587,18 @@ export function FlightSimulator() {
         />
       </div>
 
-      <div className="mt-3">
+      <div className="mt-2">
         <Aircraft
           occupiedSeatIds={displayOccupied}
           animateOccupancy={isRealizing && !realization.reducedMotion}
         />
       </div>
 
-      <div className="mt-3">
+      <div className="mt-2">
         <Timeline currentPeriod={snapshot.period} livePeriod={livePeriod} />
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-8 border-t border-line pt-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+      <div className="mt-3 grid grid-cols-1 gap-8 border-t border-line pt-3 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
         <div>
           <StrategySelector
             strategy={strategy}
@@ -526,7 +610,7 @@ export function FlightSimulator() {
               period={snapshot.period}
               selectedFare={(snapshot.selectedFare ?? DEFAULT_FARE) as Fare}
               onChange={handleFareChange}
-              disabled={isRealizing}
+              disabled={isRealizing || liveSoldOut}
             />
           ) : null}
           <SimulatorModelStatus
@@ -534,6 +618,7 @@ export function FlightSimulator() {
             status={demandModel.status}
             error={pricingError ?? demandModel.error}
             optimizedFare={strategy === "optimized" ? snapshot.selectedFare : null}
+            soldOut={strategy === "optimized" && (liveSoldOut || (snapshot.selectedFare === null && remaining === 0 && snapshot.mlPredictedMean !== null))}
             immediateExpectedRevenue={snapshot.immediateExpectedRevenue}
             futureValue={snapshot.futureValue}
             totalValue={snapshot.totalValue}
@@ -541,13 +626,14 @@ export function FlightSimulator() {
         </div>
         <DemandPanel
           period={snapshot.period}
-          trueMarketMean={displayTrueMean}
-          mlPredictedMean={snapshot.mlPredictedMean}
-          selectedFare={snapshot.selectedFare}
-          fareKind={snapshot.fareKind}
-          realizedBookings={displayRealized}
+          trueMarketMean={shownDemand.trueMarketMean}
+          mlPredictedMean={shownDemand.mlPredictedMean}
+          selectedFare={shownDemand.selectedFare}
+          soldOut={shownDemand.soldOut}
+          fareKind={shownDemand.fareKind}
+          realizedBookings={shownDemand.realizedBookings}
           sampling={sampling}
-          showMlMean={(snapshot.fareKind === "myopic" || snapshot.fareKind === "optimized") && modelReady}
+          showMlMean={shownDemand.showMlMean}
         />
       </div>
     </div>

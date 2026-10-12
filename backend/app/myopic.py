@@ -21,8 +21,8 @@ class FareCandidate:
 
 @dataclass(frozen=True)
 class MyopicDecision:
-    selected_fare: int
-    predicted_mu: float
+    selected_fare: int | None
+    predicted_mu: float | None
     expected_sales: float
     expected_revenue: float
     candidates: tuple[FareCandidate, ...]
@@ -51,7 +51,16 @@ def myopic_decision(period: int, cumulative_bookings: int) -> MyopicDecision:
             )
         )
 
-    selected = max(candidates, key=lambda row: row.expected_revenue)
+    if remaining_capacity == 0:
+        return MyopicDecision(
+            selected_fare=None,
+            predicted_mu=None,
+            expected_sales=0.0,
+            expected_revenue=0.0,
+            candidates=tuple(candidates),
+        )
+
+    selected = max(candidates, key=lambda row: (row.expected_revenue, -row.fare))
     return MyopicDecision(
         selected_fare=selected.fare,
         predicted_mu=selected.predicted_mu,

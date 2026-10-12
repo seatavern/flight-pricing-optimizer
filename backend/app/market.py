@@ -6,6 +6,7 @@ import numpy as np
 
 CAPACITY = 100
 N_PERIODS = 10
+NO_FARE = -1
 FARES = np.array([50, 60, 70, 80, 90, 100, 110, 120, 130], dtype=np.int64)
 
 EXPECTED_FARE_MIN = np.array([60, 60, 55, 55, 50, 50, 50, 55, 65, 75], dtype=np.float64)

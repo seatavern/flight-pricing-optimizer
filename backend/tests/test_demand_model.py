@@ -34,7 +34,7 @@ def test_hidden_dgp_variables_cannot_enter_training_features() -> None:
     data = generate_training_data(3, seed=TRAIN_SEED)
     hidden = set(HIDDEN_VARIABLES)
     assert hidden.isdisjoint(data.feature_names())
-    assert TARGET_NAME == "realized_bookings"
+    assert TARGET_NAME == "latent_demand"
     assert TARGET_NAME not in data.feature_names()
     assert "flight_id" not in data.feature_names()
     X = observable_feature_matrix(data)

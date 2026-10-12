@@ -65,34 +65,35 @@ export function applyPeriodRealization(input: {
   history: readonly PeriodSnapshot[];
   viewIndex: number;
   booked: number;
-  fare: number;
+  fare: number | null;
   nextOccupiedSeatIds: readonly string[];
   strategy: PricingStrategy;
   trueMarketMean?: number | null;
 }): { history: PeriodSnapshot[]; viewIndex: number } {
   const current = input.history[input.viewIndex];
   const atLiveEdge = input.viewIndex === input.history.length - 1;
-  if (
-    !current ||
-    !atLiveEdge ||
-    current.period <= 0 ||
-    current.realizedBookings !== null ||
-    current.selectedFare === null
-  ) {
+  if (!current || !atLiveEdge || current.period <= 0 || current.realizedBookings !== null) {
     return { history: input.history.map((row) => ({ ...row })), viewIndex: input.viewIndex };
   }
 
   const remaining = FLIGHT.capacity - current.occupiedSeatIds.length;
+  const soldOut = remaining <= 0;
+  if (!soldOut && (current.selectedFare === null || input.fare === null)) {
+    return { history: input.history.map((row) => ({ ...row })), viewIndex: input.viewIndex };
+  }
+
   const booked = realizedSales(input.booked, remaining);
+  const revenue = soldOut || input.fare === null
+    ? current.revenue
+    : revenueAfterRealization(current.revenue, input.fare, booked);
   const occupiedSeatIds = input.nextOccupiedSeatIds.slice(0, current.occupiedSeatIds.length + booked);
-  const revenue = revenueAfterRealization(current.revenue, input.fare, booked);
 
   const recorded: PeriodSnapshot = {
     ...current,
     occupiedSeatIds,
     revenue,
     realizedBookings: booked,
-    selectedFare: input.fare,
+    selectedFare: soldOut ? null : input.fare,
     trueMarketMean: input.trueMarketMean ?? current.trueMarketMean,
   };
 
@@ -101,7 +102,8 @@ export function applyPeriodRealization(input: {
     occupiedSeatIds: [...occupiedSeatIds],
     revenue,
     realizedBookings: null,
-    selectedFare: input.strategy === "fixed" ? input.fare : null,
+    selectedFare:
+      input.strategy === "fixed" ? (input.fare ?? current.selectedFare ?? DEFAULT_FARE) : null,
     fareKind: input.strategy,
     trueMarketMean: null,
     mlPredictedMean: null,
