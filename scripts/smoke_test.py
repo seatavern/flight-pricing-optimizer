@@ -1,5 +1,6 @@
 """Read-only checks for the frontend, API and startup-trained model."""
 import argparse
+import http.client
 import json
 import time
 import urllib.error
@@ -20,7 +21,7 @@ def check(base_url: str, timeout: int = 900) -> None:
                 assert b"<html" in response.read().lower(), "Missing frontend HTML"
             print("Frontend, API and trained model checks passed.", flush=True)
             return
-        except (urllib.error.URLError, TimeoutError, AssertionError, ValueError) as exc:
+        except (OSError, http.client.HTTPException, AssertionError, ValueError) as exc:
             if time.monotonic() >= deadline:
                 raise RuntimeError("Application did not become ready in time") from exc
             time.sleep(5)
