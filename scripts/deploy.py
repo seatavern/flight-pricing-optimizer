@@ -45,7 +45,11 @@ def main():
             properties = after["properties"]
             if stable_config(before) != stable_config(after):
                 raise RuntimeError("Deployment changed configuration beyond the image")
-            if properties.get("latestReadyRevisionName") == properties["latestRevisionName"]:
+            revision = az("containerapp", "revision", "show", *common,
+                          "--revision", properties["latestRevisionName"])["properties"]
+            if (revision.get("provisioningState") == "Provisioned"
+                    and revision.get("active")
+                    and revision.get("trafficWeight") == 100):
                 break
             if time.monotonic() >= deadline:
                 raise RuntimeError("New revision did not become ready")
