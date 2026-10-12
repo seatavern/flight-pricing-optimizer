@@ -1,4 +1,7 @@
 node_modules
+.test-build
+.github
+scripts
 .next
 .git
 .venv
