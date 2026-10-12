@@ -20,7 +20,7 @@ Next.js, FastAPI and the public proxy remain in one image. The public port stays
 - Deployment identity: `id-flight-pricing-github`
 
 The identity trusts only
-`repo:seatavern/flight-pricing-optimizer:ref:refs/heads/main` from GitHub's OIDC
+`repo:seatavern@47350809/flight-pricing-optimizer@1377710563:ref:refs/heads/main` from GitHub's OIDC
 issuer. It has `AcrPush` on the existing registry and `Container Apps Contributor`
 on this app. Client, tenant and subscription IDs in the workflow are public
 identifiers, not credentials. No client secret or registry password is stored
