@@ -164,7 +164,7 @@ export function FlightSimulator() {
   const [pricingError, setPricingError] = useState<string | null>(null);
   const [realization, setRealization] = useState<PeriodRealization | null>(null);
   const realizingRef = useRef(false);
-  const shownDemandRef = useRef({
+  const [lastShownDemand, setLastShownDemand] = useState({
     trueMarketMean: null as number | null,
     mlPredictedMean: null as number | null,
     selectedFare: DEFAULT_FARE as number | null,
@@ -513,8 +513,20 @@ export function FlightSimulator() {
       (snapshot.fareKind === "myopic" || snapshot.fareKind === "optimized") && modelReady,
     realizedBookings: displayRealized,
   };
-  if (!needsLiveDecision) shownDemandRef.current = currentDemand;
-  const shownDemand = needsLiveDecision ? shownDemandRef.current : currentDemand;
+  // Preserve the previous display while the next pricing decision is loading.
+  // Only update when its values change, so this converges after one render.
+  if (!needsLiveDecision && (
+    !Object.is(currentDemand.trueMarketMean, lastShownDemand.trueMarketMean) ||
+    !Object.is(currentDemand.mlPredictedMean, lastShownDemand.mlPredictedMean) ||
+    currentDemand.selectedFare !== lastShownDemand.selectedFare ||
+    currentDemand.soldOut !== lastShownDemand.soldOut ||
+    currentDemand.fareKind !== lastShownDemand.fareKind ||
+    currentDemand.showMlMean !== lastShownDemand.showMlMean ||
+    currentDemand.realizedBookings !== lastShownDemand.realizedBookings
+  )) {
+    setLastShownDemand(currentDemand);
+  }
+  const shownDemand = needsLiveDecision ? lastShownDemand : currentDemand;
 
   return (
     <div className="min-h-full bg-page px-6 py-2.5 lg:px-10 lg:py-3">

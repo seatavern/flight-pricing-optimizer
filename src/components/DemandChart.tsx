@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CHART_MAX_BOOKINGS, periodLabel as formatPeriod } from "@/lib/constants";
 import { poissonPmfs, poissonSupportMax } from "@/lib/poisson";
 
@@ -33,9 +33,10 @@ export function DemandChart({
     showMl ? poissonSupportMax(mlPredictedMean) : 0,
     realizedBookings ?? 0,
   );
-  const axisRef = useRef(neededK);
-  if (neededK > axisRef.current) axisRef.current = neededK;
-  const maxK = axisRef.current;
+  const [axisMax, setAxisMax] = useState(neededK);
+  // Keep the axis from shrinking, using render state rather than a mutable ref.
+  if (neededK > axisMax) setAxisMax(neededK);
+  const maxK = Math.max(axisMax, neededK);
   const truePmf = poissonPmfs(mu, maxK);
   const mlPmf = showMl ? poissonPmfs(mlPredictedMean, maxK) : null;
   const peak = Math.max(...truePmf, ...(mlPmf ?? []), 0);
